@@ -232,6 +232,86 @@ Known local smoke surfaces include:
 Other GGML tensor types may work if the model artifact preserves the expected
 OmniVoice tensor names and metadata.
 
+## Docker
+
+A multi-stage `Dockerfile` and `docker-compose.yml` are included for running both `omnivoice-server` (OpenAI-compatible TTS HTTP server on port `8000`) and `omnivoice-cli` on **CPU** (`runtime-cpu`, default) or **NVIDIA CUDA** (`runtime-cuda`).
+
+The Docker build automatically initializes `vendor/ggml` (`v0.9.11`) if missing and applies `patches/ggml-v0.9.11-omnivoice-cuda-fixes.patch`.
+
+### 1. Prepare Directories & Download Model
+
+Create local mount directories (`models/`, `voices/`, `output/`) and download a GGUF model into `models/`:
+
+```bash
+mkdir -p models voices output
+
+# Using Hugging Face CLI:
+hf download bluryar/omnivoice-gguf omnivoice-q8_0.gguf --local-dir models
+
+# Or using curl:
+curl -L https://huggingface.co/bluryar/omnivoice-gguf/resolve/main/omnivoice-q8_0.gguf \
+  -o models/omnivoice-q8_0.gguf
+```
+
+### 2. Build and Run with Docker Compose
+
+**CPU Mode (default):**
+
+```bash
+docker compose up --build -d
+```
+
+**NVIDIA GPU (CUDA) Mode:**
+
+Requires the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html):
+
+```bash
+docker compose --profile gpu up --build -d omnivoice-cuda
+```
+
+You can customize the model file, port, or CPU thread count via environment variables:
+
+```bash
+MODEL_FILE=omnivoice-q8_0.gguf PORT=8000 THREADS=8 docker compose up -d
+```
+
+### 3. Test the HTTP Server
+
+Check server health:
+
+```bash
+curl http://localhost:8000/health
+```
+
+Synthesize speech via `POST /v1/audio/speech` (see [`docs/SERVER.md`](docs/SERVER.md) for full API documentation):
+
+```bash
+curl -X POST http://localhost:8000/v1/audio/speech \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": "Hello! Welcome to OmniVoice running in Docker.",
+    "voice": "female, young adult",
+    "num_step": 16
+  }' \
+  --output output/hello.wav
+```
+
+### 4. Run One-Shot CLI in Docker
+
+You can also invoke `omnivoice-cli` directly inside the container:
+
+```bash
+docker compose run --rm --entrypoint omnivoice-cli omnivoice \
+  --model /models/omnivoice-q8_0.gguf \
+  --text "Hello from the CLI inside Docker." \
+  --output /output/cli-test.wav \
+  --language English \
+  --instruct "male, low pitch" \
+  --device cpu \
+  --threads 4 \
+  --num_step 16
+```
+
 ## Limitations
 
 - Reference audio input is limited to WAV, MP3, and FLAC.

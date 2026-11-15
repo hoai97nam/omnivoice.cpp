@@ -1,0 +1,10 @@
+build/
+build-*/
+.git/
+models/
+voices/
+*.gguf
+*.wav
+*.mp3
+*.pcm
+
