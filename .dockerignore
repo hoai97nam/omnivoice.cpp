@@ -1,8 +1,10 @@
 build/
 build-*/
 .git/
+integrations/
 models/
 voices/
+output/
 *.gguf
 *.wav
 *.mp3

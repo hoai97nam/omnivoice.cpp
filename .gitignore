@@ -13,3 +13,4 @@ models/
 *.ogg
 
 .DS_Store
+output/

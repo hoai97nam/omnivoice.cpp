@@ -269,10 +269,10 @@ Requires the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud
 docker compose --profile gpu up --build -d omnivoice-cuda
 ```
 
-You can customize the model file, port, or CPU thread count via environment variables:
+You can customize the model file, port, CPU thread count, or default step count via environment variables:
 
 ```bash
-MODEL_FILE=omnivoice-q8_0.gguf PORT=8000 THREADS=8 docker compose up -d
+MODEL_FILE=omnivoice-q8_0.gguf PORT=8000 THREADS=8 NUM_STEP=8 docker compose up -d
 ```
 
 ### 3. Test the HTTP Server
@@ -311,6 +311,37 @@ docker compose run --rm --entrypoint omnivoice-cli omnivoice \
   --threads 4 \
   --num_step 16
 ```
+
+## CapCut TTS API Compatibility (`capcut-tts-api`)
+
+`omnivoice-server` also exposes CapCut's common-task TTS endpoints so existing applications built on [`K07VN/capcut-tts-api`](https://github.com/K07VN/capcut-tts-api) can switch between the **CapCut** cloud backend and a local **OmniVoice** backend without changing call sites:
+
+- `POST /lv/v1/common_task/new` — parses CapCut `<speak><voice><prosody>` SSML (plus optional `payload.omnivoice` overrides) and queues an async TTS task, returning `{"ret": "0", "data": {"tasks": [{"id", "token", "bind_id", "status": "running"}]}}`.
+- `POST /lv/v1/common_task/query` — returns task status (`running` / `succeed` / `failed`) and `audio_subtitles[]` with downloadable `url` / `speech_url` / `audio_url` links when complete.
+- `GET /lv/v1/tts_artifact/<task_id>/<index>.<ext>` — serves the generated MP3/WAV audio bytes.
+
+An adapted Python SDK package with parallel `"capcut"` and `"omnivoice"` backends is provided in [`integrations/capcut-tts-api`](integrations/capcut-tts-api/README.md#parallel-backends-capcut-vs-omnivoice):
+
+```python
+from capcut_tts_api import CapCutClient
+
+# Option 1: Existing CapCut backend (default)
+capcut = CapCutClient(backend="capcut")
+
+# Option 2: Local OmniVoice backend (same methods, URIs, and return shapes)
+local = CapCutClient(backend="omnivoice", omnivoice_url="http://localhost:8000")
+result = local.generate_speech("Xin chào!", voice="BV421_vivn_streaming", timeout=180)
+local.download_tts_audio(result, "output/hello.mp3")
+```
+
+Or switch an existing app with zero code edits via environment variables:
+
+```bash
+export CAPCUT_TTS_BACKEND=omnivoice
+export OMNIVOICE_BASE_URL=http://localhost:8000
+```
+
+See [`integrations/capcut-tts-api/README.md`](integrations/capcut-tts-api/README.md) for CLI flags (`--backend omnivoice`), voice mapping (`OMNIVOICE_VOICE_MAP`), and STT fallback behavior (`CapCutBackendNotSupportedError`).
 
 ## Limitations
 

@@ -1,0 +1,521 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "OmniVoice & CapCut Compatible TTS API",
+    "version": "1.0.0",
+    "description": "Standalone C++ text-to-speech HTTP server exposing both an OpenAI-compatible TTS API (/v1/audio/speech) and CapCut common-task compatible TTS endpoints (/lv/v1/common_task/new, /lv/v1/common_task/query, /lv/v1/tts_artifact/{task_id}/{filename})."
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "Current OmniVoice Server (same origin)"
+    },
+    {
+      "url": "http://localhost:8000",
+      "description": "Local Docker OmniVoice Server"
+    },
+    {
+      "url": "https://editor-api-sg.capcutapi.com",
+      "description": "CapCut Cloud Backend (requires signed device headers)"
+    }
+  ],
+  "tags": [
+    {
+      "name": "OpenAI-Compatible TTS",
+      "description": "Synchronous speech synthesis and voice preset inspection"
+    },
+    {
+      "name": "CapCut Common-Task TTS",
+      "description": "Asynchronous task-based TTS endpoints compatible with capcut-tts-api"
+    },
+    {
+      "name": "System",
+      "description": "Health and service status"
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": ["System"],
+        "summary": "Health check",
+        "operationId": "getHealth",
+        "responses": {
+          "200": {
+            "description": "Server is ready",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HealthResponse" },
+                "example": { "status": "ok" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/models": {
+      "get": {
+        "tags": ["OpenAI-Compatible TTS"],
+        "summary": "List loaded models",
+        "operationId": "listModels",
+        "responses": {
+          "200": {
+            "description": "Available model list",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ModelListResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/audio/voices": {
+      "get": {
+        "tags": ["OpenAI-Compatible TTS"],
+        "summary": "List voice cloning presets from --voices-dir",
+        "operationId": "listVoicePresets",
+        "responses": {
+          "200": {
+            "description": "Configured voice presets",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/VoicePresetListResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/audio/speech": {
+      "post": {
+        "tags": ["OpenAI-Compatible TTS"],
+        "summary": "Synthesize speech audio (OpenAI-compatible)",
+        "operationId": "createSpeech",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SpeechRequest" },
+              "examples": {
+                "english_voice_design": {
+                  "summary": "English voice design (MP3)",
+                  "value": {
+                    "input": "Hello! Welcome to OmniVoice running in Docker.",
+                    "voice": "female, young adult",
+                    "response_format": "mp3",
+                    "num_step": 8,
+                    "speed": 1.0
+                  }
+                },
+                "vietnamese_tts": {
+                  "summary": "Vietnamese synthesis (WAV)",
+                  "value": {
+                    "input": "Xin chào! Đây là giọng nói tiếng Việt từ OmniVoice.",
+                    "voice": "female, young adult",
+                    "language": "vi",
+                    "response_format": "wav",
+                    "num_step": 8
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Synthesized binary audio stream",
+            "content": {
+              "audio/mpeg": {
+                "schema": { "type": "string", "format": "binary" }
+              },
+              "audio/wav": {
+                "schema": { "type": "string", "format": "binary" }
+              },
+              "audio/pcm": {
+                "schema": { "type": "string", "format": "binary" }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request parameters",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/OpenAIError" }
+              }
+            }
+          },
+          "500": {
+            "description": "Synthesis failure",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/OpenAIError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lv/v1/common_task/new": {
+      "post": {
+        "tags": ["CapCut Common-Task TTS"],
+        "summary": "Submit an asynchronous CapCut-compatible TTS task",
+        "description": "Accepts CapCut common-task JSON with SSML (<speak><voice><prosody>) and optional payload.omnivoice overrides. Returns a task id and token to poll via /lv/v1/common_task/query. STT tasks (req_key=cc_audio_subtitle_asr) return ret='4001'.",
+        "operationId": "createCapCutCommonTask",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CapCutCommonTaskNewRequest" },
+              "examples": {
+                "capcut_ssml_inline": {
+                  "summary": "CapCut SSML with inline JSON payload",
+                  "value": {
+                    "bind_id": "11111111-2222-3333-4444-555555555555",
+                    "can_queue": true,
+                    "enter_from": "text_to_speech",
+                    "tasks": [
+                      {
+                        "context": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+                        "req_key": "sami_text_to_speech",
+                        "task_version": "v3",
+                        "payload": {
+                          "audio_format": "mp3",
+                          "scene": "text_to_speech",
+                          "ssml": "<speak version=\"1.0\" xml:lang=\"en-US\"><voice name=\"BV421_vivn_streaming\" resource_id=\"7252594014782755330\"><prosody rate=\"1.0\">Xin chào từ OmniVoice!</prosody></voice></speak>",
+                          "omnivoice": {
+                            "language": "vi",
+                            "instructions": "female, young adult",
+                            "num_step": 8
+                          }
+                        }
+                      }
+                    ]
+                  }
+                },
+                "capcut_ssml_string": {
+                  "summary": "CapCut SDK format (stringified payload)",
+                  "value": {
+                    "bind_id": "11111111-2222-3333-4444-555555555555",
+                    "can_queue": true,
+                    "enter_from": "text_to_speech",
+                    "tasks": [
+                      {
+                        "context": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+                        "req_key": "sami_text_to_speech",
+                        "task_version": "v3",
+                        "payload": "{\"audio_format\":\"mp3\",\"scene\":\"text_to_speech\",\"ssml\":\"<speak version=\\\"1.0\\\" xml:lang=\\\"en-US\\\"><voice name=\\\"BV074_streaming\\\" resource_id=\\\"7102355709945188865\\\"><prosody rate=\\\"1.0\\\">Hello from CapCut compatible endpoint.</prosody></voice></speak>\"}"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "CapCut task envelope (ret='0' on success, non-zero ret on application error)",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CapCutCommonTaskResponse" },
+                "example": {
+                  "ret": "0",
+                  "errmsg": "",
+                  "data": {
+                    "bind_id": "11111111-2222-3333-4444-555555555555",
+                    "tasks": [
+                      {
+                        "id": "26eab49bc26ba8107ebd57ab1ce6fbb1",
+                        "token": "e978f94dea08285e0770d621ec599a8c",
+                        "bind_id": "11111111-2222-3333-4444-555555555555",
+                        "req_key": "sami_text_to_speech",
+                        "task_version": "v3",
+                        "status": "running"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed JSON body",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/OpenAIError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lv/v1/common_task/query": {
+      "post": {
+        "tags": ["CapCut Common-Task TTS"],
+        "summary": "Poll a CapCut-compatible TTS task",
+        "description": "Queries the status of a task created via /lv/v1/common_task/new. When status is 'succeed', payload is a JSON string containing audio_subtitles[] with downloadable artifact URLs.",
+        "operationId": "queryCapCutCommonTask",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CapCutCommonTaskQueryRequest" },
+              "example": {
+                "tasks": [
+                  {
+                    "id": "26eab49bc26ba8107ebd57ab1ce6fbb1",
+                    "token": "e978f94dea08285e0770d621ec599a8c",
+                    "bind_id": "11111111-2222-3333-4444-555555555555",
+                    "req_key": "sami_text_to_speech",
+                    "task_version": "v3"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Task status and completed artifact URLs",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CapCutCommonTaskResponse" },
+                "example": {
+                  "ret": "0",
+                  "errmsg": "",
+                  "data": {
+                    "bind_id": "11111111-2222-3333-4444-555555555555",
+                    "tasks": [
+                      {
+                        "id": "26eab49bc26ba8107ebd57ab1ce6fbb1",
+                        "token": "e978f94dea08285e0770d621ec599a8c",
+                        "bind_id": "11111111-2222-3333-4444-555555555555",
+                        "req_key": "sami_text_to_speech",
+                        "task_version": "v3",
+                        "status": "succeed",
+                        "payload": "{\"audio_subtitles\":[{\"url\":\"http://localhost:8000/lv/v1/tts_artifact/26eab49bc26ba8107ebd57ab1ce6fbb1/0.mp3\",\"speech_url\":\"http://localhost:8000/lv/v1/tts_artifact/26eab49bc26ba8107ebd57ab1ce6fbb1/0.mp3\",\"audio_url\":\"http://localhost:8000/lv/v1/tts_artifact/26eab49bc26ba8107ebd57ab1ce6fbb1/0.mp3\",\"text\":\"Hello!\",\"duration_ms\":1480}]}"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lv/v1/tts_artifact/{task_id}/{filename}": {
+      "get": {
+        "tags": ["CapCut Common-Task TTS"],
+        "summary": "Download a synthesized segment artifact",
+        "operationId": "downloadCapCutArtifact",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Task ID returned by /lv/v1/common_task/new"
+          },
+          {
+            "name": "filename",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "example": "0.mp3" },
+            "description": "Zero-based segment filename (e.g. 0.mp3 or 0.wav)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Synthesized audio file",
+            "content": {
+              "audio/mpeg": {
+                "schema": { "type": "string", "format": "binary" }
+              },
+              "audio/wav": {
+                "schema": { "type": "string", "format": "binary" }
+              },
+              "audio/pcm": {
+                "schema": { "type": "string", "format": "binary" }
+              }
+            }
+          },
+          "404": {
+            "description": "Artifact or task not found",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/OpenAIError" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "HealthResponse": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "example": "ok" }
+        }
+      },
+      "ModelListResponse": {
+        "type": "object",
+        "properties": {
+          "object": { "type": "string", "example": "list" },
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string", "example": "omnivoice" },
+                "object": { "type": "string", "example": "model" },
+                "owned_by": { "type": "string", "example": "local" }
+              }
+            }
+          }
+        }
+      },
+      "VoicePresetListResponse": {
+        "type": "object",
+        "properties": {
+          "object": { "type": "string", "example": "list" },
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "object": { "type": "string", "example": "voice" },
+                "has_ref_text": { "type": "boolean" },
+                "ref_text": { "type": "string" }
+              }
+            }
+          }
+        }
+      },
+      "SpeechRequest": {
+        "type": "object",
+        "required": ["input"],
+        "properties": {
+          "input": { "type": "string", "description": "Text to synthesize" },
+          "voice": { "type": "string", "description": "Preset name from --voices-dir or voice design attributes (e.g. 'female, young adult')" },
+          "instructions": { "type": "string", "description": "Voice design attributes" },
+          "instruct": { "type": "string", "description": "Alias for instructions" },
+          "language": { "type": "string", "description": "Language name or ISO code (e.g. 'en', 'vi', 'zh', 'ja')" },
+          "response_format": { "type": "string", "enum": ["wav", "mp3", "pcm"], "default": "wav" },
+          "speed": { "type": "number", "minimum": 0.25, "maximum": 4.0, "default": 1.0 },
+          "ref_audio": { "type": "string", "description": "Reference WAV/MP3/FLAC path or preset name for voice cloning" },
+          "ref_text": { "type": "string", "description": "Transcript of ref_audio (required when ref_audio is set)" },
+          "auto_voice": { "type": "boolean", "default": false },
+          "num_step": { "type": "integer", "minimum": 1, "description": "Unmasking steps (higher = better quality, slower)" },
+          "guidance_scale": { "type": "number", "default": 2.0 },
+          "t_shift": { "type": "number", "default": 0.1 },
+          "layer_penalty_factor": { "type": "number", "default": 5.0 },
+          "position_temperature": { "type": "number", "default": 5.0 },
+          "class_temperature": { "type": "number", "default": 0.0 },
+          "duration": { "type": "number", "description": "Fixed output duration in seconds" },
+          "denoise": { "type": "boolean", "default": true },
+          "preprocess_prompt": { "type": "boolean", "default": true },
+          "postprocess_output": { "type": "boolean", "default": true },
+          "audio_chunk_duration": { "type": "number", "default": 15.0 },
+          "audio_chunk_threshold": { "type": "number", "default": 30.0 },
+          "seed": { "type": "integer" }
+        }
+      },
+      "CapCutCommonTaskNewRequest": {
+        "type": "object",
+        "required": ["tasks"],
+        "properties": {
+          "bind_id": { "type": "string" },
+          "can_queue": { "type": "boolean", "default": true },
+          "enter_from": { "type": "string", "default": "text_to_speech" },
+          "tasks": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["payload"],
+              "properties": {
+                "context": { "type": "string" },
+                "req_key": { "type": "string", "default": "sami_text_to_speech" },
+                "task_version": { "type": "string", "default": "v3" },
+                "payload": {
+                  "description": "JSON object or JSON-serialized string containing ssml, audio_format, and optional omnivoice overrides",
+                  "oneOf": [
+                    { "type": "string" },
+                    { "type": "object" }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "CapCutCommonTaskQueryRequest": {
+        "type": "object",
+        "required": ["tasks"],
+        "properties": {
+          "tasks": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["id", "token"],
+              "properties": {
+                "id": { "type": "string" },
+                "token": { "type": "string" },
+                "bind_id": { "type": "string" },
+                "req_key": { "type": "string", "default": "sami_text_to_speech" },
+                "task_version": { "type": "string", "default": "v3" }
+              }
+            }
+          }
+        }
+      },
+      "CapCutCommonTaskResponse": {
+        "type": "object",
+        "properties": {
+          "ret": { "type": "string", "example": "0" },
+          "errmsg": { "type": "string", "example": "" },
+          "data": {
+            "type": "object",
+            "properties": {
+              "bind_id": { "type": "string" },
+              "tasks": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "string" },
+                    "token": { "type": "string" },
+                    "bind_id": { "type": "string" },
+                    "req_key": { "type": "string" },
+                    "task_version": { "type": "string" },
+                    "status": { "type": "string", "enum": ["running", "succeed", "failed"] },
+                    "payload": { "type": "string" },
+                    "errmsg": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "OpenAIError": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "message": { "type": "string" },
+              "type": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+

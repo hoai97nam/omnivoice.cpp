@@ -24,6 +24,8 @@ services:
       - "cpu"
       - "--threads"
       - "${THREADS:-4}"
+      - "--num-step"
+      - "${NUM_STEP:-8}"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -54,6 +56,8 @@ services:
       - "/voices"
       - "--device"
       - "cuda:0"
+      - "--num-step"
+      - "${NUM_STEP:-32}"
     deploy:
       resources:
         reservations:
