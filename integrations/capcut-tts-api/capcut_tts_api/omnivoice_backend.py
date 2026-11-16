@@ -250,9 +250,28 @@ class OmniVoiceBackend:
 
     # -------------------------------------------------------------- requests
 
-    def build_omnivoice_options(self, voice_fields: Dict[str, Any]) -> Dict[str, Any]:
+    def build_omnivoice_options(
+        self,
+        voice_fields: Dict[str, Any],
+        rate: str = "1.0",
+        language: Optional[str] = None,
+        instructions: Optional[str] = None,
+    ) -> Dict[str, Any]:
         opts: Dict[str, Any] = dict(self.params)
         opts.update(voice_fields)
+        if language:
+            mapped_lang = capcut_lang_to_omnivoice(language)
+            if mapped_lang:
+                opts["language"] = mapped_lang
+        if instructions:
+            opts["instructions"] = instructions
+        if rate and "speed" not in opts:
+            try:
+                spd = float(rate)
+                if spd > 0:
+                    opts["speed"] = max(0.25, min(4.0, spd))
+            except (TypeError, ValueError):
+                pass
         opts["response_format"] = self.response_format
         return opts
 
@@ -263,14 +282,18 @@ class OmniVoiceBackend:
         resource_id: str,
         voice_fields: Dict[str, Any],
         extra_headers: Optional[Dict[str, str]] = None,
+        rate: str = "1.0",
+        language: Optional[str] = None,
+        instructions: Optional[str] = None,
     ) -> Tuple[str, Dict[str, str], str]:
         """Build a CapCut-shaped POST /lv/v1/common_task/new request for omnivoice-server."""
         esc = lambda s: _xml_escape(s, {'"': "&quot;", "'": "&apos;"})
+        rate_str = str(rate or "1.0")
         voice_blocks = [
             f'    <voice name="{esc(voice_type)}" mock_tone_info="" platform="sami" '
             f'resource_id="{esc(resource_id)}" emotion="" emotion_scale="0" style="" role="" '
             f'moyin_emotion="" is_clone_tone="false" need_subtitle_timestamp="false">\n'
-            f'        <prosody rate="1.0">{_xml_escape(text)}</prosody>\n'
+            f'        <prosody rate="{esc(rate_str)}">{_xml_escape(text)}</prosody>\n'
             f'    </voice>'
             for text in texts
         ]
@@ -294,7 +317,9 @@ class OmniVoiceBackend:
             "need_subtitle_timestamp": False,
             "scene": "text_to_speech",
             "ssml": ssml,
-            "omnivoice": self.build_omnivoice_options(voice_fields),
+            "omnivoice": self.build_omnivoice_options(
+                voice_fields, rate=rate_str, language=language, instructions=instructions
+            ),
         }
         body = {
             "bind_id": str(uuid.uuid4()),

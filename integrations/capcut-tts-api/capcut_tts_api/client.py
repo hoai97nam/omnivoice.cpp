@@ -226,7 +226,10 @@ class CapCutClient:
         texts: Union[str, List[str]],
         voice: Optional[str] = "BV074_streaming",
         resource_id: Optional[str] = None,
+        rate: str = "1.0",
         payload_sign: Optional[str] = None,
+        language: Optional[str] = None,
+        instructions: Optional[str] = None,
     ) -> Tuple[str, Dict[str, str], str]:
         """
         Build URL, headers, and body string for creating a new TTS task.
@@ -236,6 +239,7 @@ class CapCutClient:
         ``/lv/v1/common_task/new`` request targeting ``omnivoice-server`` with
         resolved OmniVoice metadata attached.
         """
+        rate_str = str(rate or "1.0")
         if self.is_omnivoice:
             text_list = self._normalize_texts(texts)
             voice_type, final_resource_id = self.resolve_voice(voice=voice, resource_id=resource_id)
@@ -246,6 +250,9 @@ class CapCutClient:
                 final_resource_id,
                 voice_fields,
                 extra_headers=self.extra_headers,
+                rate=rate_str,
+                language=language,
+                instructions=instructions,
             )
 
         if isinstance(texts, str):
@@ -270,7 +277,7 @@ class CapCutClient:
                 f'    <voice name="{escape_xml(voice_type)}" mock_tone_info="" platform="sami" '
                 f'resource_id="{escape_xml(final_resource_id)}" emotion="" emotion_scale="0" style="" role="" '
                 f'moyin_emotion="" is_clone_tone="false" need_subtitle_timestamp="false">\n'
-                f'        <prosody rate="1.0">{escape_xml(text)}</prosody>\n'
+                f'        <prosody rate="{escape_xml(rate_str)}">{escape_xml(text)}</prosody>\n'
                 f'    </voice>'
             )
         ssml = (
@@ -441,13 +448,22 @@ class CapCutClient:
         texts: Union[str, List[str]],
         voice: Optional[str] = "BV074_streaming",
         resource_id: Optional[str] = None,
+        rate: str = "1.0",
         payload_sign: Optional[str] = None,
+        language: Optional[str] = None,
+        instructions: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Submit a new Text-to-Speech task (CapCut API or omnivoice-server).
         """
         url, headers, body_text = self.build_tts_new_request(
-            texts, voice, resource_id, payload_sign
+            texts,
+            voice,
+            resource_id,
+            rate=rate,
+            payload_sign=payload_sign,
+            language=language,
+            instructions=instructions,
         )
         return self._post_json(url, headers, body_text, "create_tts_task")
 
@@ -467,16 +483,25 @@ class CapCutClient:
         texts: Union[str, List[str]],
         voice: Optional[str] = "BV074_streaming",
         resource_id: Optional[str] = None,
+        rate: str = "1.0",
         wait: bool = True,
         poll_interval: float = 1.0,
         timeout: float = 60.0,
         payload_sign: Optional[str] = None,
+        language: Optional[str] = None,
+        instructions: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Convenience method: Submits TTS task and polls until completed.
         """
         create_res = self.create_tts_task(
-            texts, voice, resource_id, payload_sign
+            texts,
+            voice,
+            resource_id,
+            rate=rate,
+            payload_sign=payload_sign,
+            language=language,
+            instructions=instructions,
         )
         if not wait:
             return create_res
